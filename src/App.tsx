@@ -19,6 +19,14 @@ function App() {
     releaseWakeLock();
   }, [releaseWakeLock]);
 
+  const handleDismissUI = useCallback(() => {
+    setShowUI(false);
+    if (idleTimeout.current) {
+      window.clearTimeout(idleTimeout.current);
+      idleTimeout.current = null;
+    }
+  }, []);
+
   const handleTogglePlay = async () => {
     if (isPlaying) {
       stopPractice();
@@ -87,6 +95,7 @@ function App() {
           onToggle={handleTogglePlay} 
           timerMinutes={timerMinutes}
           setTimerMinutes={setTimerMinutes}
+          onDismiss={handleDismissUI}
         />
       </div>
     </main>

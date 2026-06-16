@@ -9,6 +9,7 @@ export class AudioEngine {
   private isPlaying: boolean = false;
   private nextEventTime: number = 0;
   private timeoutId: number | null = null;
+  private activeCueOscillators: { osc: OscillatorNode; gain: GainNode; stopTime: number }[] = [];
 
   private bgVolume: number = 1.0;
   private cueVolume: number = 1.0;
@@ -103,7 +104,7 @@ export class AudioEngine {
     try {
       const loadFile = async (name: 'campfire' | 'ocean') => {
         if (this.externalAudioBuffers[name]) return;
-        const response = await fetch(`/audio/${name}.ogg`);
+        const response = await fetch(`${import.meta.env.BASE_URL}audio/${name}.ogg`);
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = await this.ctx!.decodeAudioData(arrayBuffer);
         this.externalAudioBuffers[name] = audioBuffer;
@@ -180,6 +181,10 @@ export class AudioEngine {
 
   startCycle() {
     if (!this.ctx || !this.noiseGain || !this.osc || !this.oscGain) return;
+    
+    // Stop any existing cycle first to clean up completely
+    this.stop();
+
     this.isPlaying = true;
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
@@ -198,7 +203,24 @@ export class AudioEngine {
 
   stop() {
     this.isPlaying = false;
-    if (this.timeoutId) clearTimeout(this.timeoutId);
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+
+    // Stop and disconnect all active/scheduled cue oscillators
+    const now = this.ctx ? this.ctx.currentTime : 0;
+    this.activeCueOscillators.forEach(item => {
+      try {
+        item.gain.gain.cancelScheduledValues(now);
+        // Ramp down to prevent pops/clicks
+        item.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        item.osc.stop(now + 0.05);
+      } catch (e) {
+        // Already stopped or context closed
+      }
+    });
+    this.activeCueOscillators = [];
 
     if (this.ctx && this.noiseGain && this.oscGain) {
       const now = this.ctx.currentTime;
@@ -231,8 +253,15 @@ export class AudioEngine {
       gain.connect(this.ctx.destination);
     }
 
+    const stopTime = t + 3;
     osc.start(t);
-    osc.stop(t + 3);
+    osc.stop(stopTime);
+
+    // Clean up finished cue oscillators
+    const now = this.ctx.currentTime;
+    this.activeCueOscillators = this.activeCueOscillators.filter(item => item.stopTime > now);
+
+    this.activeCueOscillators.push({ osc, gain, stopTime });
   }
 
   private scheduleNextCycle() {

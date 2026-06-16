@@ -6,9 +6,10 @@ interface Props {
   onToggle: () => void;
   timerMinutes: number;
   setTimerMinutes: (m: number) => void;
+  onDismiss?: () => void;
 }
 
-export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinutes, setTimerMinutes }) => {
+export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinutes, setTimerMinutes, onDismiss }) => {
   const [bgVol, setBgVol] = useState(1);
   const [cueVol, setCueVol] = useState(1);
   const [noiseType, setNoiseType] = useState<'zen' | 'campfire' | 'ocean'>('zen');
@@ -30,17 +31,24 @@ export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinute
     audio.setNoiseType(type);
   };
 
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPlaying && e.target === e.currentTarget && onDismiss) {
+      onDismiss();
+    }
+  };
+
   return (
-    <div className={`absolute inset-0 flex flex-col items-center justify-center z-10 text-white ${isPlaying ? 'bg-black/10 backdrop-blur-sm' : 'bg-black/40 backdrop-blur-md'}`}>
+    <div 
+      onClick={handleOverlayClick}
+      className={`absolute inset-0 flex flex-col items-center justify-center z-10 text-white ${isPlaying ? 'bg-black/10 backdrop-blur-sm' : 'bg-black/40 backdrop-blur-md'}`}
+    >
       
-      {!isPlaying && (
-        <div className="mb-12 flex flex-col items-center">
-          <p className="text-white/40 text-sm font-light tracking-[0.2em] mb-2 uppercase">Somnus</p>
-          <p className="text-white/80 text-xl font-light tracking-widest">
-            4-7-8 Deep Relaxation
-          </p>
-        </div>
-      )}
+      <div className={`mb-12 flex flex-col items-center transition-all duration-500 ${isPlaying ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <p className="text-white/40 text-sm font-light tracking-[0.2em] mb-2 uppercase">Somnus</p>
+        <p className="text-white/80 text-xl font-light tracking-widest">
+          4-7-8 Deep Relaxation
+        </p>
+      </div>
 
       <button 
         onClick={onToggle}
