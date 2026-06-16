@@ -22,14 +22,14 @@ export class AudioEngine {
     }
   }
 
-  private noiseBuffers: Record<'pink' | 'brown', AudioBuffer | null> = { pink: null, brown: null };
-  private activeNoiseType: 'zen' | 'wind' | 'ocean' = 'zen';
-  private oceanFilter: BiquadFilterNode | null = null;
-  private oceanLfo: OscillatorNode | null = null;
+  private externalAudioBuffers: Record<'campfire' | 'ocean', AudioBuffer | null> = { campfire: null, ocean: null };
+  private activeNoiseType: 'zen' | 'campfire' | 'ocean' = 'zen';
   private noiseProfileGain: GainNode | null = null;
   private osc2: OscillatorNode | null = null;
+  private isLoadingAudio = false;
+  private compressor: DynamicsCompressorNode | null = null;
 
-  setNoiseType(type: 'zen' | 'wind' | 'ocean') {
+  setNoiseType(type: 'zen' | 'campfire' | 'ocean') {
     this.activeNoiseType = type;
     if (this.ctx && this.noiseGain) {
       this.switchNoiseSource();
@@ -41,19 +41,26 @@ export class AudioEngine {
     if (!this.osc || !this.osc2 || !this.noiseProfileGain || !this.ctx) return;
     
     const now = this.ctx.currentTime;
+    
+    // Cancel any previous ramps to avoid clicks when sliding values
+    this.noiseProfileGain.gain.cancelScheduledValues(now);
+    this.oscGain.gain.cancelScheduledValues(now);
 
     if (this.activeNoiseType === 'zen') {
       this.osc.detune.setTargetAtTime(-400, now, 0.1); 
       this.osc2.detune.setTargetAtTime(-361, now, 0.1); 
+      this.oscGain.gain.setTargetAtTime(0.5, now, 0.1); // Strong prominent drone
       this.noiseProfileGain.gain.setTargetAtTime(0.001, now, 0.1);
     } else if (this.activeNoiseType === 'ocean') {
       this.osc.detune.setTargetAtTime(-900, now, 0.1); 
       this.osc2.detune.setTargetAtTime(-874, now, 0.1); 
-      this.noiseProfileGain.gain.setTargetAtTime(0.5, now, 0.1);
-    } else {
+      this.oscGain.gain.setTargetAtTime(0.1, now, 0.1); // Very subtle deep rumble
+      this.noiseProfileGain.gain.setTargetAtTime(3.0, now, 0.1); // Boost ocean wave strongly
+    } else { // Campfire
       this.osc.detune.setTargetAtTime(0, now, 0.1); 
       this.osc2.detune.setTargetAtTime(52, now, 0.1); 
-      this.noiseProfileGain.gain.setTargetAtTime(0.2, now, 0.1);
+      this.oscGain.gain.setTargetAtTime(0.05, now, 0.1); // Almost no drone
+      this.noiseProfileGain.gain.setTargetAtTime(15.0, now, 0.1); // Campfire recording is EXTREMELY quiet, boost massively
     }
   }
 
@@ -67,59 +74,45 @@ export class AudioEngine {
         this.pinkNoiseSource.disconnect();
       }
     } catch(e) {}
-    try {
-      if (this.oceanFilter) {
-        this.oceanFilter.disconnect();
-      }
-    } catch(e) {}
-    try {
-      if (this.oceanLfo) {
-        this.oceanLfo.stop();
-        this.oceanLfo.disconnect();
-      }
-    } catch(e) {}
 
     if (this.activeNoiseType === 'zen') {
       return;
     }
 
-    const buffer = this.activeNoiseType === 'ocean' ? this.noiseBuffers.brown : this.noiseBuffers.pink;
+    const buffer = this.activeNoiseType === 'ocean' ? this.externalAudioBuffers.ocean : this.externalAudioBuffers.campfire;
     
     if (buffer) {
       this.pinkNoiseSource = this.ctx.createBufferSource();
       this.pinkNoiseSource.buffer = buffer;
       this.pinkNoiseSource.loop = true;
-
-      if (this.activeNoiseType === 'ocean') {
-        this.oceanFilter = this.ctx.createBiquadFilter();
-        this.oceanFilter.type = 'lowpass';
-        this.oceanFilter.frequency.value = 400; 
-
-        this.oceanLfo = this.ctx.createOscillator();
-        this.oceanLfo.type = 'sine';
-        this.oceanLfo.frequency.value = 0.1; 
-        
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 250; 
-        
-        this.oceanLfo.connect(lfoGain);
-        lfoGain.connect(this.oceanFilter.frequency);
-        
-        this.pinkNoiseSource.connect(this.oceanFilter);
-        this.oceanFilter.connect(this.noiseGain);
-        this.oceanLfo.start();
-      } else {
-        // Wind: Add a soft bandpass to make it sound airy and natural
-        this.oceanFilter = this.ctx.createBiquadFilter();
-        this.oceanFilter.type = 'bandpass';
-        this.oceanFilter.frequency.value = 600;
-        this.oceanFilter.Q.value = 0.4;
-        
-        this.pinkNoiseSource.connect(this.oceanFilter);
-        this.oceanFilter.connect(this.noiseGain);
-      }
-      
+      this.pinkNoiseSource.connect(this.noiseGain);
       this.pinkNoiseSource.start();
+    }
+  }
+
+  private async loadExternalAudio() {
+    if (!this.ctx || this.isLoadingAudio) return;
+    this.isLoadingAudio = true;
+    try {
+      const loadFile = async (name: 'campfire' | 'ocean') => {
+        if (this.externalAudioBuffers[name]) return;
+        const response = await fetch(`/audio/${name}.ogg`);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await this.ctx!.decodeAudioData(arrayBuffer);
+        this.externalAudioBuffers[name] = audioBuffer;
+        
+        // If the user selected this mode and we are playing, switch to it immediately
+        if (this.activeNoiseType === name && this.isPlaying) {
+          this.switchNoiseSource();
+        }
+      };
+
+      await Promise.all([
+        loadFile('campfire'),
+        loadFile('ocean')
+      ]);
+    } catch (e) {
+      console.error("Failed to load external audio", e);
     }
   }
 
@@ -127,35 +120,8 @@ export class AudioEngine {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     
-    const bufferSize = this.ctx.sampleRate * 2; 
-
-    // 1. Pink Noise (Wind)
-    const pinkBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const pinkOut = pinkBuffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      pinkOut[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
-      b6 = white * 0.115926;
-    }
-    this.noiseBuffers.pink = pinkBuffer;
-
-    // 2. Brown Noise (Ocean/Deep Waterfall)
-    const brownBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const brownOut = brownBuffer.getChannelData(0);
-    let lastOut = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      lastOut = (lastOut + (0.02 * white)) / 1.02;
-      brownOut[i] = lastOut * 3.5;
-    }
-    this.noiseBuffers.brown = brownBuffer;
+    // Start fetching MP3 files asynchronously in the background
+    this.loadExternalAudio();
 
     // Setup Master Gains
     this.masterBgGain = this.ctx.createGain();
@@ -166,10 +132,19 @@ export class AudioEngine {
     this.masterCueGain.gain.value = this.cueVolume;
     this.masterCueGain.connect(this.ctx.destination);
 
+    // Setup Compressor to prevent clipping from aggressive boosts
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.value = -24;
+    this.compressor.knee.value = 30;
+    this.compressor.ratio.value = 12;
+    this.compressor.attack.value = 0.003;
+    this.compressor.release.value = 0.25;
+    this.compressor.connect(this.masterBgGain);
+
     // Setup Profile Noise Gain (static volume per profile)
     this.noiseProfileGain = this.ctx.createGain();
     this.noiseProfileGain.gain.value = 0.15; // default Wind
-    this.noiseProfileGain.connect(this.masterBgGain);
+    this.noiseProfileGain.connect(this.compressor);
 
     // Setup Noise Breathing Envelope
     this.noiseGain = this.ctx.createGain();
@@ -212,7 +187,7 @@ export class AudioEngine {
     this.osc.frequency.cancelScheduledValues(now);
     if (this.osc2) this.osc2.frequency.cancelScheduledValues(now);
 
-    this.oscGain.gain.setValueAtTime(0.5, now);
+    this.applyProfileInstantly();
     this.nextEventTime = now;
     this.scheduleNextCycle();
   }

@@ -11,7 +11,7 @@ interface Props {
 export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinutes, setTimerMinutes }) => {
   const [bgVol, setBgVol] = useState(1);
   const [cueVol, setCueVol] = useState(1);
-  const [noiseType, setNoiseType] = useState<'wind' | 'ocean' | 'drone'>('wind');
+  const [noiseType, setNoiseType] = useState<'zen' | 'campfire' | 'ocean'>('zen');
 
   const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
@@ -25,7 +25,7 @@ export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinute
     audio.setVolumes(bgVol, v);
   };
 
-  const handleNoiseChange = (type: 'wind' | 'ocean' | 'drone') => {
+  const handleNoiseChange = (type: 'zen' | 'campfire' | 'ocean') => {
     setNoiseType(type);
     audio.setNoiseType(type);
   };
@@ -69,7 +69,7 @@ export const ControlPanel: React.FC<Props> = ({ isPlaying, onToggle, timerMinute
         <div className="flex flex-col gap-3">
           <label className="text-xs text-white/50 tracking-wider">Background Type</label>
           <div className="flex bg-white/10 p-1 rounded-lg">
-            {(['wind', 'ocean', 'drone'] as const).map(t => (
+            {(['zen', 'campfire', 'ocean'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => handleNoiseChange(t)}
