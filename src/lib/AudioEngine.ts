@@ -41,7 +41,7 @@ export class AudioEngine {
   }
 
   private applyProfileInstantly() {
-    if (!this.osc || !this.osc2 || !this.noiseProfileGain || !this.ctx) return;
+    if (!this.osc || !this.osc2 || !this.noiseProfileGain || !this.ctx || !this.oscGain) return;
 
     const now = this.ctx.currentTime;
 
@@ -236,7 +236,7 @@ export class AudioEngine {
   }
 
   private scheduleNextCycle() {
-    if (!this.isPlaying || !this.ctx || !this.noiseGain || !this.osc) return;
+    if (!this.isPlaying || !this.ctx || !this.noiseGain || !this.osc || !this.osc2) return;
 
     const t = this.nextEventTime;
     const TIME_EPSILON = 0.01;
