@@ -59,8 +59,8 @@ export class AudioEngine {
     } else { // Campfire
       this.osc.detune.setTargetAtTime(0, now, 0.1); 
       this.osc2.detune.setTargetAtTime(52, now, 0.1); 
-      this.oscGain.gain.setTargetAtTime(0.05, now, 0.1); // Almost no drone
-      this.noiseProfileGain.gain.setTargetAtTime(15.0, now, 0.1); // Campfire recording is EXTREMELY quiet, boost massively
+      this.oscGain.gain.setTargetAtTime(0.02, now, 0.1); // Barely a whisper of drone
+      this.noiseProfileGain.gain.setTargetAtTime(25.0, now, 0.1); // Campfire recording is EXTREMELY quiet, boost massively
     }
   }
 
@@ -134,9 +134,9 @@ export class AudioEngine {
 
     // Setup Compressor to prevent clipping from aggressive boosts
     this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = -24;
-    this.compressor.knee.value = 30;
-    this.compressor.ratio.value = 12;
+    this.compressor.threshold.value = -12; // Allow more volume through
+    this.compressor.knee.value = 15;
+    this.compressor.ratio.value = 4; // Gentler compression
     this.compressor.attack.value = 0.003;
     this.compressor.release.value = 0.25;
     this.compressor.connect(this.masterBgGain);
