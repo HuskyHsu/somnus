@@ -1,0 +1,16 @@
+{
+  "name": "somnus",
+  "short_name": "somnus",
+  "icons": [
+    {
+      "src": "icons/maskable_icon_x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FBF9F2",
+  "theme_color": "#FBF9F2"
+}
