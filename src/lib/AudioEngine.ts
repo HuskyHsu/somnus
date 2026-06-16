@@ -11,12 +11,27 @@ export class AudioEngine {
   private timeoutId: number | null = null;
   private activeCueOscillators: { osc: OscillatorNode; gain: GainNode; stopTime: number }[] = [];
 
-  private bgVolume: number = 1.0;
-  private cueVolume: number = 1.0;
+  private bgVolume: number = (() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('somnus_bg_volume');
+      return saved !== null ? parseFloat(saved) : 1.0;
+    }
+    return 1.0;
+  })();
+
+  private cueVolume: number = (() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('somnus_cue_volume');
+      return saved !== null ? parseFloat(saved) : 1.0;
+    }
+    return 1.0;
+  })();
 
   setVolumes(bg: number, cue: number) {
     this.bgVolume = bg;
     this.cueVolume = cue;
+    localStorage.setItem('somnus_bg_volume', bg.toString());
+    localStorage.setItem('somnus_cue_volume', cue.toString());
     if (this.ctx && this.masterBgGain && this.masterCueGain) {
       this.masterBgGain.gain.setTargetAtTime(bg, this.ctx.currentTime, 0.1);
       this.masterCueGain.gain.setTargetAtTime(cue, this.ctx.currentTime, 0.1);
@@ -27,14 +42,26 @@ export class AudioEngine {
     campfire: null,
     ocean: null,
   };
-  private activeNoiseType: 'zen' | 'campfire' | 'ocean' = 'zen';
+  private activeNoiseType: 'zen' | 'campfire' | 'ocean' = (() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('somnus_noise_type');
+      if (saved === 'zen' || saved === 'campfire' || saved === 'ocean') {
+        return saved;
+      }
+    }
+    return 'zen';
+  })();
   private noiseProfileGain: GainNode | null = null;
   private osc2: OscillatorNode | null = null;
+  private panner1: StereoPannerNode | null = null;
+  private panner2: StereoPannerNode | null = null;
+  private lowpassFilter: BiquadFilterNode | null = null;
   private isLoadingAudio = false;
   private compressor: DynamicsCompressorNode | null = null;
 
   setNoiseType(type: 'zen' | 'campfire' | 'ocean') {
     this.activeNoiseType = type;
+    localStorage.setItem('somnus_noise_type', type);
     if (this.ctx && this.noiseGain) {
       this.switchNoiseSource();
       this.applyProfileInstantly();
@@ -51,22 +78,41 @@ export class AudioEngine {
     this.oscGain.gain.cancelScheduledValues(now);
 
     if (this.activeNoiseType === 'zen') {
-      this.osc.detune.setTargetAtTime(-400, now, 0.1);
-      this.osc2.detune.setTargetAtTime(-361, now, 0.1);
+      this.osc.detune.setTargetAtTime(0, now, 0.1); // Grounding base E2
+      this.osc2.detune.setTargetAtTime(8, now, 0.1); // 8 cents difference = ~0.38Hz Delta wave binaural beat
       this.oscGain.gain.setTargetAtTime(0.5, now, 0.1); // Strong prominent drone
-      this.noiseProfileGain.gain.setTargetAtTime(0.001, now, 0.1);
-    } else if (this.activeNoiseType === 'ocean') {
-      this.osc.detune.setTargetAtTime(-900, now, 0.1);
-      this.osc2.detune.setTargetAtTime(-874, now, 0.1);
-      this.oscGain.gain.setTargetAtTime(0.1, now, 0.1); // Very subtle deep rumble
-      this.noiseProfileGain.gain.setTargetAtTime(3.0, now, 0.1); // Boost ocean wave strongly
+      this.noiseProfileGain.gain.setTargetAtTime(0.04, now, 0.1); // Gentle breathing noise
+      if (this.lowpassFilter) {
+        this.lowpassFilter.frequency.setTargetAtTime(180, now, 0.1); // Base cutoff for drone
+      }
     } else {
-      // Campfire
-      this.osc.detune.setTargetAtTime(0, now, 0.1);
-      this.osc2.detune.setTargetAtTime(52, now, 0.1);
-      this.oscGain.gain.setTargetAtTime(0.02, now, 0.1); // Barely a whisper of drone
-      this.noiseProfileGain.gain.setTargetAtTime(25.0, now, 0.1); // Campfire recording is EXTREMELY quiet, boost massively
+      if (this.lowpassFilter) {
+        this.lowpassFilter.frequency.setTargetAtTime(10000, now, 0.1); // Open fully for ocean/campfire
+      }
+      if (this.activeNoiseType === 'ocean') {
+        this.osc.detune.setTargetAtTime(-900, now, 0.1);
+        this.osc2.detune.setTargetAtTime(-874, now, 0.1);
+        this.oscGain.gain.setTargetAtTime(0.1, now, 0.1); // Very subtle deep rumble
+        this.noiseProfileGain.gain.setTargetAtTime(3.0, now, 0.1); // Boost ocean wave strongly
+      } else {
+        // Campfire
+        this.osc.detune.setTargetAtTime(0, now, 0.1);
+        this.osc2.detune.setTargetAtTime(52, now, 0.1);
+        this.oscGain.gain.setTargetAtTime(0.02, now, 0.1); // Barely a whisper of drone
+        this.noiseProfileGain.gain.setTargetAtTime(25.0, now, 0.1); // Campfire recording is EXTREMELY quiet, boost massively
+      }
     }
+  }
+
+  private createWhiteNoiseBuffer(): AudioBuffer {
+    if (!this.ctx) throw new Error('AudioContext not initialized');
+    const bufferSize = 2 * this.ctx.sampleRate;
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    return noiseBuffer;
   }
 
   private switchNoiseSource() {
@@ -81,6 +127,12 @@ export class AudioEngine {
     } catch (e) {}
 
     if (this.activeNoiseType === 'zen') {
+      const buffer = this.createWhiteNoiseBuffer();
+      this.pinkNoiseSource = this.ctx.createBufferSource();
+      this.pinkNoiseSource.buffer = buffer;
+      this.pinkNoiseSource.loop = true;
+      this.pinkNoiseSource.connect(this.noiseGain);
+      this.pinkNoiseSource.start();
       return;
     }
 
@@ -158,21 +210,36 @@ export class AudioEngine {
 
     this.switchNoiseSource();
 
-    // Setup Dual Oscillators (Binaural Drone)
+    // Setup Dual Oscillators (Binaural Drone) with Stereo Panning (Static Left & Right)
     this.oscGain = this.ctx.createGain();
     this.oscGain.gain.value = 0;
     this.oscGain.connect(this.masterBgGain);
 
+    // Setup Lowpass filter to keep triangle waves warm and eliminate high-frequency buzz
+    this.lowpassFilter = this.ctx.createBiquadFilter();
+    this.lowpassFilter.type = 'lowpass';
+    this.lowpassFilter.frequency.value = 350; // Keep the warm low-to-mid harmonic texture
+    this.lowpassFilter.connect(this.oscGain);
+
+    this.panner1 = this.ctx.createStereoPanner();
+    this.panner1.pan.value = -1; // Static full left for true binaural beats
+    this.panner1.connect(this.lowpassFilter);
+
+    this.panner2 = this.ctx.createStereoPanner();
+    this.panner2.pan.value = 1; // Static full right for true binaural beats
+    this.panner2.connect(this.lowpassFilter);
+
+    // Use Triangle waves to introduce warm harmonics that are much easier to localize in space
     this.osc = this.ctx.createOscillator();
-    this.osc.type = 'sine';
+    this.osc.type = 'triangle';
     this.osc.frequency.value = 164.81;
-    this.osc.connect(this.oscGain);
+    this.osc.connect(this.panner1);
     this.osc.start();
 
     this.osc2 = this.ctx.createOscillator();
-    this.osc2.type = 'sine';
+    this.osc2.type = 'triangle';
     this.osc2.frequency.value = 164.81;
-    this.osc2.connect(this.oscGain);
+    this.osc2.connect(this.panner2);
     this.osc2.start();
 
     // Apply initial profile detuning to oscillators
@@ -181,7 +248,7 @@ export class AudioEngine {
 
   startCycle() {
     if (!this.ctx || !this.noiseGain || !this.osc || !this.oscGain) return;
-    
+
     // Stop any existing cycle first to clean up completely
     this.stop();
 
@@ -210,7 +277,7 @@ export class AudioEngine {
 
     // Stop and disconnect all active/scheduled cue oscillators
     const now = this.ctx ? this.ctx.currentTime : 0;
-    this.activeCueOscillators.forEach(item => {
+    this.activeCueOscillators.forEach((item) => {
       try {
         item.gain.gain.cancelScheduledValues(now);
         // Ramp down to prevent pops/clicks
@@ -239,12 +306,12 @@ export class AudioEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-
+    osc.type = 'sine';
+    // Use low-frequency warm bell tones instead of high beeps for all modes
+    osc.frequency.value = freq === 432 ? 110.0 : 164.81;
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.8, t + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 3);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.25); // slow, gentle attack to prevent startle
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 4.5); // long decay
 
     osc.connect(gain);
     if (this.masterCueGain) {
@@ -253,13 +320,13 @@ export class AudioEngine {
       gain.connect(this.ctx.destination);
     }
 
-    const stopTime = t + 3;
+    const stopTime = t + 4.5;
     osc.start(t);
     osc.stop(stopTime);
 
     // Clean up finished cue oscillators
     const now = this.ctx.currentTime;
-    this.activeCueOscillators = this.activeCueOscillators.filter(item => item.stopTime > now);
+    this.activeCueOscillators = this.activeCueOscillators.filter((item) => item.stopTime > now);
 
     this.activeCueOscillators.push({ osc, gain, stopTime });
   }
@@ -269,10 +336,11 @@ export class AudioEngine {
 
     const t = this.nextEventTime;
     const TIME_EPSILON = 0.01;
+    const isZen = this.activeNoiseType === 'zen';
 
-    // Base frequencies are scheduled constantly. Profile switching handles the pitch shift!
-    const minFreq = 164.81; // Base E3
-    const maxFreq = 246.94; // Base B3
+    // Base frequencies: Zen uses deep E2, others use E3
+    const minFreq = isZen ? 82.41 : 164.81;
+    const maxFreq = isZen ? 123.47 : 246.94;
 
     // --- 1. Inhale 4s ---
     this.playCue(t, 432);
@@ -285,6 +353,11 @@ export class AudioEngine {
     this.noiseGain.gain.exponentialRampToValueAtTime(0.1, t + TIME_EPSILON);
     this.noiseGain.gain.exponentialRampToValueAtTime(1.0, t + 4);
 
+    if (isZen && this.lowpassFilter) {
+      this.lowpassFilter.frequency.setValueAtTime(180, t);
+      this.lowpassFilter.frequency.exponentialRampToValueAtTime(350, t + 4);
+    }
+
     // --- 2. Hold 7s ---
     this.playCue(t + 4, 864);
     this.osc.frequency.setValueAtTime(maxFreq, t + 4);
@@ -295,6 +368,11 @@ export class AudioEngine {
     this.noiseGain.gain.setValueAtTime(1.0, t + 4);
     this.noiseGain.gain.exponentialRampToValueAtTime(1.001, t + 11);
 
+    if (isZen && this.lowpassFilter) {
+      this.lowpassFilter.frequency.setValueAtTime(350, t + 4);
+      this.lowpassFilter.frequency.exponentialRampToValueAtTime(350.5, t + 11);
+    }
+
     // --- 3. Exhale 8s ---
     this.playCue(t + 11, 432);
     this.osc.frequency.setValueAtTime(maxFreq, t + 11);
@@ -304,6 +382,11 @@ export class AudioEngine {
 
     this.noiseGain.gain.setValueAtTime(1.0, t + 11);
     this.noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 19);
+
+    if (isZen && this.lowpassFilter) {
+      this.lowpassFilter.frequency.setValueAtTime(350, t + 11);
+      this.lowpassFilter.frequency.exponentialRampToValueAtTime(140, t + 19);
+    }
 
     this.nextEventTime += 19;
 

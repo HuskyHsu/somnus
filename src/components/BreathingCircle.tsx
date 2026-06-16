@@ -14,6 +14,7 @@ interface Props {
 
 export const BreathingCircle: React.FC<Props> = ({ isActive }) => {
   const [phase, setPhase] = useState<Phase>('idle');
+  const [rippleKey, setRippleKey] = useState(0);
   
   useEffect(() => {
     if (!isActive) {
@@ -42,6 +43,14 @@ export const BreathingCircle: React.FC<Props> = ({ isActive }) => {
     return () => { isMounted = false; };
   }, [isActive]);
 
+  useEffect(() => {
+    if (phase === 'hold') {
+      setRippleKey(prev => prev + 1);
+    } else if (phase === 'idle') {
+      setRippleKey(0);
+    }
+  }, [phase]);
+
   let style: React.CSSProperties = {
     transitionProperty: 'all',
     transitionTimingFunction: 'linear',
@@ -64,6 +73,16 @@ export const BreathingCircle: React.FC<Props> = ({ isActive }) => {
 
   return (
     <div className="relative flex items-center justify-center w-full h-full overflow-hidden bg-black">
+      {/* Ripple wave at transition to hold */}
+      {rippleKey > 0 && phase === 'hold' && (
+        <div 
+          key={rippleKey}
+          className="absolute w-64 h-64 rounded-full pointer-events-none animate-ripple"
+          style={{ backgroundColor: '#991b1b', filter: 'blur(30px)' }}
+        />
+      )}
+
+      {/* Main breathing circle */}
       <div className="absolute w-64 h-64 rounded-full flex items-center justify-center" style={style}>
         <div 
           className={cn("w-full h-full rounded-full", phase === 'hold' ? 'animate-breathe' : '')}
