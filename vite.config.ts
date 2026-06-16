@@ -11,22 +11,23 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: '4-7-8 Breathing',
-        short_name: 'Breathe',
+        name: 'somnus',
+        short_name: 'somnus',
         description: '4-7-8 deep relaxation breathing app',
-        theme_color: '#000000',
-        background_color: '#000000',
+        theme_color: '#FBF9F2',
+        background_color: '#FBF9F2',
         display: 'standalone',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'icons/icon-192x192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'icons/maskable_icon_x512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'maskable any',
           },
         ],
       },
