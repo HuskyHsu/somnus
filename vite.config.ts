@@ -16,7 +16,7 @@ export default defineConfig({
         description: '4-7-8 deep relaxation breathing app',
         theme_color: '#FBF9F2',
         background_color: '#FBF9F2',
-        display: 'standalone',
+        display: 'fullscreen',
         icons: [
           {
             src: 'icons/icon-192x192.png',
