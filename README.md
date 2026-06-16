@@ -1,65 +1,71 @@
-# Somnus - Minimalist 4-7-8 Sleep Aid & Breathing PWA
+# Somnus - Premium 4-7-8 Sleep Aid & Neuro-Acoustic Breathing PWA
 
-Somnus is a premium, minimalist, and ultra-low stimulation web application designed to help users transition into deep sleep using the **4-7-8 breathing method**. Built with React, TypeScript, Tailwind CSS, and the Web Audio API, it offers a seamless and non-disruptive audio-visual environment that respects sleep hygiene.
+Somnus is a premium, minimalist, and ultra-low stimulation Progressive Web App (PWA) designed to guide users into deep, restful sleep using the **4-7-8 breathing method**. Built with React, TypeScript, and the Web Audio API, Somnus features a scientifically optimized, non-disruptive audio-visual environment that respects sleep hygiene and accelerates parasympathetic nervous system activation.
 
-## 🌙 Why Somnus?
-Sleep environments require extremely low sensory stimulation. Somnus addresses this through carefully researched auditory and visual designs:
-- **Pink Noise**: Unlike harsh white noise, pink noise has a power spectral density inversely proportional to frequency ($1/f$). It mimics deep rustling leaves or wind, making it more natural and soothing for the human ear.
-- **Deep Red Lighting**: Using color psychology, the visual cue is restricted to a very deep red (`#200000` / HSL: Hue 0, Saturation 100%, Lightness < 15%) on a pitch-black background. This minimizes blue light exposure and prevents the suppression of melatonin, the sleep hormone.
-- **Distraction-Free**: Once the exercise starts, all buttons, sliders, and text fade out completely, leaving only the gentle visual pulse to guide your breathing.
+---
+
+## 🌙 Scientific Design Philosophy
+
+Sleep onset requires the mitigation of cognitive arousal and the reduction of stress hormones like **Cortisol**. Somnus achieves this through evidence-based visual and auditory neuro-acoustic engineering:
+
+### 1. Neuro-Acoustic Zen Sound Design
+The default **Zen Mode** is custom-designed using the Web Audio API to act as a somatic sleep-induction drone:
+* **Deep Grounding Frequencies**: Anchored around a low **E2 fundamental pitch (82.41 Hz)** rather than higher, stimulating frequencies. This encourages deep physical resonance and relaxation.
+* **0.38 Hz Delta Binaural Beat**: Synthesized dynamically by detuning dual triangle wave oscillators by exactly **8 cents** (~0.38 Hz detune) and mapping them to static stereo panning (**Full Left (-1) and Full Right (1)**). When wearing headphones, this encourages brainwave entrainment towards the deep Delta wave sleep range.
+* **Respiratory lowpass Filter Sweeps**: A Biquad lowpass filter sweeps warm harmonics in sync with breathing:
+  * **Inhale (4s)**: Filter cutoff opens from 180 Hz to 350 Hz, mimicking the acoustic opening of the airway.
+  * **Hold (7s)**: Filter remains stable at 350 Hz.
+  * **Exhale (8s)**: Filter sweeps down to 140 Hz, easing the user into a warm, grounded release.
+* **Resonant Respiratory White Noise**: A custom-generated white noise buffer simulates the gentle friction of breathing, fading in and out organically without clicking or pop artifacts.
+
+### 2. Slow-Attack Temple Chimes
+To transition between breathing phases without triggering the startle reflex:
+* Somnus replaces sudden high-pitched beeps with low, resonant **Zen temple gongs (110 Hz / 164.8 Hz)**.
+* Features a **250ms slow-attack envelope** to prevent cortisol spikes, fading into a long **4.5-second exponential decay**.
+
+### 3. Ultra-Low Stimulation Visual Aura
+Visual guides are limited to a pitch-black background with subtle dark-red glows to prevent melatonin suppression:
+* **Base Aura Color**: `#4d0000` (Deep Dark Red, `blur(40px)`) that expands on inhalation and fades on exhalation.
+* **Transition Ripple**: `#991b1b` (Muted Red, `blur(30px)`) that pulses briefly during the 7-second hold phase to reinforce rhythmic pacing without requiring visual focus.
 
 ---
 
 ## 🧘 The 4-7-8 Breathing Technique
-Originating from pranayama yoga and popularized by Dr. Andrew Weil, the 4-7-8 technique is a natural tranquilizer for the nervous system:
-1. **Inhale (4 seconds)**: Breathe in quietly through your nose.
-2. **Hold (7 seconds)**: Hold your breath.
-3. **Exhale (8 seconds)**: Exhale completely through your mouth with a soft whoosh sound.
+Popularized by Dr. Andrew Weil, this yogic pranayama technique acts as a natural nervous system tranquilizer:
+1. **Inhale (4 seconds)**: Breathe in quietly through the nose (Deepening drone, rising filter, glowing aura).
+2. **Hold (7 seconds)**: Hold your breath (Static drone, ripple visual cue).
+3. **Exhale (8 seconds)**: Exhale completely with a whoosh sound (Gently fading drone, dropping filter, dark display).
+
+---
+
+## 🔒 Smart Sleep Hygiene & Usability
+Somnus is built specifically for bedside environments:
+* **Two-Phase Accidental Touch Protection**: When breathing, the controls fade out. To make changes, the first tap anywhere simply wakes the UI. Only after a **400ms delay** does the panel become interactive. This ensures that accidental touch during a drowsy state does not interrupt your cycle or adjust settings.
+* **Dismissable Overlay**: Tapping on the empty blurred overlay immediately dismisses the panel back into breathing mode.
+* **Settings Persistence**: All user preferences—including **Sleep Timer** (15m, 30m, 60m, or ∞), **Background Sound Type** (Zen, Campfire, Ocean), and individual volume levels—are saved to `localStorage` and restored upon open.
+* **Screen Wake Lock**: Uses the Screen Wake Lock API to prevent the device screen from sleeping or locking during active breathing exercises, auto-restoring locks upon window refocus.
 
 ---
 
 ## 🛠 Tech Stack
-- **Framework**: React 19 (Vite)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Audio Synthesis**: Web Audio API
-- **Persistence & Lock**: Screen Wake Lock API
-- **App Format**: Progressive Web App (PWA) via `vite-plugin-pwa`
+* **Core**: React 19 (Vite) & TypeScript
+* **Styling**: Tailwind CSS 4
+* **Audio Synthesis**: Web Audio API (Multi-channel routing with master compression)
+* **API Integrations**: Screen Wake Lock API, LocalStorage API
+* **Deployment Format**: Progressive Web App (PWA) with complete offline caching support
 
 ---
 
-## 🏗 Component Architecture
-The codebase is structured modularly for clean segregation of concerns:
+## 🏗 Directory Structure & Components
 
-- [`src/lib/AudioEngine.ts`](file:///Users/shihchi/Developer/somnus/src/lib/AudioEngine.ts)
-  - Implements the Web Audio API nodes.
-  - Dynamically synthesizes pink noise, manages dual oscillators (producing a deep 110Hz - 220Hz binaural drone), and schedules auditory cues for phase transitions.
-  - Employs smooth parameter ramping (`exponentialRampToValueAtTime`) to eliminate clicking sounds and pops.
-- [`src/components/BreathingCircle.tsx`](file:///Users/shihchi/Developer/somnus/src/components/BreathingCircle.tsx)
-  - Controls the visual guidance using CSS transitions.
-  - Renders the deep red glow that scales and fades in sync with the current breathing phase (inhale, hold, exhale).
-- [`src/components/ControlPanel.tsx`](file:///Users/shihchi/Developer/somnus/src/components/ControlPanel.tsx)
-  - Houses the user settings, including the **Sleep Timer** (15m, 30m, 60m, or infinity), **Background Sound Type** (Zen, Campfire, Ocean), and individual volume sliders for background noise and transition cues.
-- [`src/hooks/useWakeLock.ts`](file:///Users/shihchi/Developer/somnus/src/hooks/useWakeLock.ts)
-  - Custom hook wrapping the **Screen Wake Lock API**.
-  - Prevents the device screen from turning off or locking during active practice, re-requesting the lock automatically when the app regains focus.
-
----
-
-## 🔊 Audio Engine Details
-Audio starts only after a direct **user gesture** (clicking the Start button) to comply with browser autoplay policies.
-- **Pink Noise Generator**: Connects a looping audio buffer or synthesized noise source through a `GainNode` linked directly to the breathing cycle.
-- **Binaural Drone (LFO Sine Wave)**: Uses two oscillators detuned slightly to create a calming binaural beat.
-  - **Inhale**: Frequency ramps from 110Hz to 220Hz; Pink Noise volume rises from `0.05` to `0.3`.
-  - **Hold**: Frequency remains at 220Hz; volume remains constant.
-  - **Exhale**: Frequency ramps down from 220Hz to 110Hz; Pink Noise volume fades to `0.0` or near silence.
-
----
-
-## 📱 PWA Support & Fullscreen
-Configured via `vite-plugin-pwa`, the manifest enables:
-- `display: standalone` orientation to hide browser navigation bars and status bars, keeping the experience immersive.
-- Offline support and precaching of visual and audio assets for reliability anywhere.
+* [`src/lib/AudioEngine.ts`](file:///Users/shihchi/Developer/somnus/src/lib/AudioEngine.ts)
+  * Implements custom audio buffers, dual oscillators, stereo panners, Biquad lowpass sweeps, dynamics compressors, volume ramping, and scheduling algorithms.
+* [`src/components/BreathingCircle.tsx`](file:///Users/shihchi/Developer/somnus/src/components/BreathingCircle.tsx)
+  * Visualizes the breathing guide using CSS scaling transitions, CSS keyframe animations, and deep-red radial aura filters.
+* [`src/components/ControlPanel.tsx`](file:///Users/shihchi/Developer/somnus/src/components/ControlPanel.tsx)
+  * Implements PWA control interface, slide adjustments, sleep timer selection, background sound toggling, and dim overlay controls.
+* [`src/hooks/useWakeLock.ts`](file:///Users/shihchi/Developer/somnus/src/hooks/useWakeLock.ts)
+  * Standard hook interface requesting and releasing screen wake locks.
 
 ---
 
@@ -82,10 +88,8 @@ npm run dev
 ```
 
 ### Production Build
-Build the optimized production assets and PWA files:
+Build the optimized production PWA assets:
 ```bash
 npm run build
 ```
-
-The output files will be in the `dist` directory.
-
+The compiled, ready-to-deploy static assets will be output in the `dist` directory.
